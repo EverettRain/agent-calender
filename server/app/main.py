@@ -8,6 +8,7 @@ from pathlib import Path
 import structlog
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import extractions, health, ingest, reminders, stream
 from app.config import get_settings
@@ -71,6 +72,17 @@ def create_app() -> FastAPI:
         version="0.1.0",
         lifespan=_lifespan,
     )
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origin_list(),
+        allow_credentials=False,  # we use bearer tokens, not cookies
+        allow_methods=["*"],
+        allow_headers=["*"],
+        expose_headers=["*"],
+        max_age=86400,
+    )
+
     app.include_router(health.router)
     app.include_router(ingest.router)
     app.include_router(reminders.router)

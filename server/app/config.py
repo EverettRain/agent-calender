@@ -43,6 +43,17 @@ class Settings(BaseSettings):
     SCHEDULER_ENABLED: bool = True
     NOTIFY_TICK_SECONDS: int = Field(60, ge=1, le=3600)
 
+    # CORS — Electron renderer + (future) web ingest endpoints need cross-origin.
+    # Default is permissive because we auth by bearer token (no cookies, no CSRF
+    # surface). Tighten via env if you ever expose to anonymous browsers.
+    CORS_ALLOW_ORIGINS: str = "*"
+
+    def cors_origin_list(self) -> list[str]:
+        raw = self.CORS_ALLOW_ORIGINS.strip()
+        if raw == "*":
+            return ["*"]
+        return [o.strip() for o in raw.split(",") if o.strip()]
+
     @field_validator("DEFAULT_EVENT_OFFSETS_MINUTES", "DEFAULT_DEADLINE_OFFSETS_MINUTES")
     @classmethod
     def _validate_offsets_csv(cls, v: str) -> str:
