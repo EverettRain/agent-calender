@@ -1,0 +1,213 @@
+# =============================================================================
+#  Agent-Calendar .gitignore
+#  约定：lock 文件（pnpm-lock.yaml / uv.lock）属于源码，要提交以保证可复现
+# =============================================================================
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Secrets / local config
+# ─────────────────────────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.local
+
+# Deploy config holds VPS hostname/user — should not be committed
+deploy.config.json
+
+# Local DB backups
+backups/
+
+# Claude Code per-machine permissions (not for sharing)
+.claude/settings.local.json
+
+# Reference materials kept locally for inspiration (not part of this project)
+RainCloud.sh
+
+# Generic credential / key files
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+credentials/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Python (server/)
+# ─────────────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+*.egg
+MANIFEST
+__pypackages__/
+
+# Test / lint caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+nosetests.xml
+.hypothesis/
+
+# Package manager caches / pyenv
+.uv-cache/
+.python-version
+pip-log.txt
+pip-delete-this-directory.txt
+
+# pre-commit
+.pre-commit-cache/
+
+# Alembic — keep versions/, drop bytecode
+alembic/versions/__pycache__/
+
+# SQLite runtime files
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+data/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Node / Electron (client/)
+# ─────────────────────────────────────────────────────────────────────────────
+node_modules/
+.pnpm-store/
+.npm/
+.yarn/
+.parcel-cache/
+.vite/
+.turbo/
+.cache/
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# Linter caches
+.eslintcache
+.stylelintcache
+
+# Electron / Vite build output
+client/dist/
+client/dist-electron/
+client/release/
+client/out/
+out/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Logs
+# ─────────────────────────────────────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OS — macOS
+# ─────────────────────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.AppleDouble
+.LSOverride
+.Spotlight-V100
+.Trashes
+.DocumentRevisions-V100
+.fseventsd
+.TemporaryItems
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+Icon
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OS — Windows
+# ─────────────────────────────────────────────────────────────────────────────
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OS — Linux
+# ─────────────────────────────────────────────────────────────────────────────
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Editors / IDEs
+# ─────────────────────────────────────────────────────────────────────────────
+# VS Code — allow shared settings/extensions templates
+.vscode/*
+!.vscode/settings.example.json
+!.vscode/extensions.json
+!.vscode/launch.example.json
+
+# JetBrains (IntelliJ / PyCharm / WebStorm)
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Sublime
+*.sublime-workspace
+*.sublime-project
+
+# Vim / Emacs
+*.swp
+*.swo
+*.swn
+*~
+.\#*
+\#*\#
+
+# Cursor / Zed
+.cursor/
+.zed/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Misc / temp
+# ─────────────────────────────────────────────────────────────────────────────
+tmp/
+temp/
+*.bak
+*.backup
+*.orig
+*.rej

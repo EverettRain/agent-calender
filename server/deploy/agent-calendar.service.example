@@ -1,0 +1,22 @@
+# systemd unit template — copy to /etc/systemd/system/agent-calendar.service and adjust paths
+[Unit]
+Description=Agent-Calendar Backend
+After=network.target
+
+[Service]
+Type=simple
+User=agentcal
+WorkingDirectory=/opt/agent-calendar
+EnvironmentFile=/opt/agent-calendar/.env
+ExecStart=/opt/agent-calendar/.venv/bin/uvicorn app.main:app \
+          --host 127.0.0.1 --port 8080 \
+          --workers 1 --limit-concurrency 5 --backlog 10
+Restart=on-failure
+RestartSec=5
+
+# Resource caps — 详见项目 CLAUDE.md 的资源约束
+MemoryMax=320M
+MemoryHigh=280M
+
+[Install]
+WantedBy=multi-user.target

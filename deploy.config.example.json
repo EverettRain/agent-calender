@@ -1,0 +1,11 @@
+{
+  "remoteHost": "agentcal@vps.example.com",
+  "remoteBase": "/opt/agent-calendar",
+  "serviceName": "agent-calendar",
+  "serviceUser": "agentcal",
+  "pythonBin": "python3",
+  "listenHost": "127.0.0.1",
+  "listenPort": 8080,
+  "maxDbBackups": 7,
+  "sudoCmd": "sudo"
+}
