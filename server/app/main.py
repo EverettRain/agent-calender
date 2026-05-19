@@ -10,7 +10,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import extractions, health, ingest, reminders, stream
+from app.api import extractions, groups, health, ingest, reminders, stream, tags
 from app.config import get_settings
 from app.db import Base, get_engine, get_session_factory
 from app.services.notifier import NotificationService, get_broker
@@ -86,6 +86,8 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(ingest.router)
     app.include_router(reminders.router)
+    app.include_router(tags.router)
+    app.include_router(groups.router)
     app.include_router(extractions.router)
     app.include_router(stream.router)
 

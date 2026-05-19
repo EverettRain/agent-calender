@@ -1,10 +1,71 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Check, X } from "lucide-react";
+import { useNavigate, useParams, NavLink } from "react-router-dom";
+import {
+  Bell,
+  Check,
+  Info,
+  Plug,
+  Sliders,
+  Sun,
+  Moon,
+  Monitor,
+  X,
+} from "lucide-react";
 import { useSettings } from "@/store/settings";
+import {
+  offsetsToCsv,
+  parseOffsetsCsv,
+  usePreferences,
+  type ThemePreference,
+} from "@/store/preferences";
 import { healthz } from "@/api/reminders";
+import { cn } from "@/lib/utils";
+
+type TabId = "connection" | "preferences" | "about";
+
+const TABS: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { id: "connection", label: "连接", icon: Plug },
+  { id: "preferences", label: "偏好", icon: Sliders },
+  { id: "about", label: "关于", icon: Info },
+];
 
 export default function SettingsPage() {
+  const params = useParams<{ tab?: string }>();
+  const current = (TABS.find((t) => t.id === params.tab)?.id ?? "connection") as TabId;
+
+  return (
+    <div className="mx-auto max-w-2xl p-6">
+      <div className="mb-6 flex items-center gap-1 border-b border-slate-200 dark:border-slate-800">
+        {TABS.map(({ id, label, icon: Icon }) => (
+          <NavLink
+            key={id}
+            to={id === "connection" ? "/settings" : `/settings/${id}`}
+            className={cn(
+              "flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
+              current === id
+                ? "border-indigo-500 text-indigo-600 dark:text-indigo-400"
+                : "border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300",
+            )}
+            end
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {label}
+          </NavLink>
+        ))}
+      </div>
+
+      {current === "connection" && <ConnectionPanel />}
+      {current === "preferences" && <PreferencesPanel />}
+      {current === "about" && <AboutPanel />}
+    </div>
+  );
+}
+
+// ============================================================
+// Connection panel
+// ============================================================
+
+function ConnectionPanel() {
   const settings = useSettings();
   const navigate = useNavigate();
   const [url, setUrl] = useState(settings.serverUrl);
@@ -13,7 +74,6 @@ export default function SettingsPage() {
   const [testResult, setTestResult] = useState<"ok" | "error" | null>(null);
   const [testMsg, setTestMsg] = useState("");
 
-  // Keep local form in sync if store changes externally
   useEffect(() => {
     setUrl(settings.serverUrl);
     setToken(settings.apiToken);
@@ -50,11 +110,11 @@ export default function SettingsPage() {
   const canSubmit = url.trim() && token.trim();
 
   return (
-    <div className="mx-auto max-w-xl p-6 space-y-6">
+    <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold mb-1">服务端连接</h2>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          配置 Agent-Calendar 服务端地址与 API Token，保存后可立即拉取数据。
+          填入服务端地址与访问 Token，保存后即可同步数据。
         </p>
       </div>
 
@@ -64,14 +124,14 @@ export default function SettingsPage() {
           <input
             type="text"
             className="input mt-1"
-            placeholder="http://127.0.0.1:8080 或 https://agent.yourdomain.com"
+            placeholder="https://your-server.example.com"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             spellCheck={false}
             autoComplete="off"
           />
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            指向你部署的 Agent-Calendar 服务端，结尾不带斜杠
+            指向你的 Agent-Calendar 服务端，结尾不带斜杠
           </p>
         </label>
 
@@ -80,18 +140,13 @@ export default function SettingsPage() {
           <input
             type="password"
             className="input mt-1 font-mono"
-            placeholder="服务端 .env 里的 API_TOKEN（一长串随机字符串）"
+            placeholder="服务端配置的访问 Token"
             value={token}
             onChange={(e) => setToken(e.target.value)}
             autoComplete="off"
           />
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            <span className="font-semibold text-amber-600 dark:text-amber-400">
-              注意
-            </span>
-            ：此字段为服务端连接密钥{" "}
-            <code className="font-mono">API_TOKEN</code>，非 DeepSeek API key。
-            DeepSeek Key 由服务端存储并提供，无需客户端手动输入。
+            服务端给你的访问令牌，向管理员索取
           </p>
         </label>
       </div>
@@ -124,11 +179,311 @@ export default function SettingsPage() {
         )}
       </div>
 
-      <div className="text-xs text-slate-400 border-t border-slate-200 dark:border-slate-800 pt-4">
-        本地开发时 URL 通常是 <code>http://127.0.0.1:8080</code>。
-        部署到 VPS 后建议走 SSH 隧道（本地 127.0.0.1:8080 → 远端）或反向代理出的 HTTPS 域名。
+    </div>
+  );
+}
+
+// ============================================================
+// Preferences panel
+// ============================================================
+
+function PreferencesPanel() {
+  const p = usePreferences();
+
+  return (
+    <div className="space-y-8">
+      <header>
+        <h2 className="text-lg font-semibold mb-1">应用偏好</h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          这些设置只影响当前这台设备上的展示与提醒。
+        </p>
+      </header>
+
+      {/* Theme */}
+      <Section title="外观" hint="跟随系统会响应 macOS 浅色/深色切换">
+        <div className="flex gap-2">
+          <ThemeBtn current={p.theme} value="auto" onSelect={p.setTheme} icon={Monitor} label="跟随系统" />
+          <ThemeBtn current={p.theme} value="light" onSelect={p.setTheme} icon={Sun} label="浅色" />
+          <ThemeBtn current={p.theme} value="dark" onSelect={p.setTheme} icon={Moon} label="深色" />
+        </div>
+      </Section>
+
+      {/* Today view */}
+      <Section title="今日视图">
+        <NumberRow
+          label="展示未来"
+          unit="天"
+          value={p.todayRangeDays}
+          onChange={p.setTodayRangeDays}
+          min={1}
+          max={90}
+        />
+        <ToggleRow
+          label="显示已完成的条目"
+          checked={p.showDone}
+          onChange={p.setShowDone}
+        />
+        <ToggleRow
+          label="显示已通知过的条目"
+          checked={p.showNotified}
+          onChange={p.setShowNotified}
+        />
+      </Section>
+
+      {/* Notifications */}
+      <Section title="通知" hint="到点会弹出系统通知，需先在系统设置中允许 Agent-Calendar 发送通知">
+        <ToggleRow
+          label="启用系统通知"
+          checked={p.notificationsEnabled}
+          onChange={p.setNotificationsEnabled}
+        />
+        <ToggleRow
+          label="静默通知（不出声）"
+          checked={p.notificationsSilent}
+          onChange={p.setNotificationsSilent}
+          disabled={!p.notificationsEnabled}
+        />
+      </Section>
+
+      {/* Default offsets for manual create */}
+      <Section
+        title="手动创建条目时的默认提醒"
+        hint="仅在你手动创建条目时使用；用自然语言记录时会自动判断"
+      >
+        <OffsetsRow
+          label="事件类型默认提前提醒"
+          value={p.defaultEventOffsets}
+          onChange={p.setDefaultEventOffsets}
+          example="0  ← 到点提醒"
+        />
+        <OffsetsRow
+          label="截止类型默认提前提醒"
+          value={p.defaultDeadlineOffsets}
+          onChange={p.setDefaultDeadlineOffsets}
+          example="60, 1440  ← 提前 1 小时 + 提前 1 天"
+        />
+      </Section>
+
+      <div className="border-t border-slate-200 dark:border-slate-800 pt-4">
+        <button
+          className="btn-danger"
+          onClick={() => {
+            if (confirm("把所有偏好恢复成默认值？连接配置不会动。")) {
+              p.resetAll();
+            }
+          }}
+        >
+          恢复默认偏好
+        </button>
       </div>
     </div>
+  );
+}
+
+// ============================================================
+// About panel
+// ============================================================
+
+function AboutPanel() {
+  return (
+    <div className="space-y-4">
+      <h2 className="text-lg font-semibold">关于</h2>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+        <dt className="text-slate-500">应用</dt>
+        <dd>Agent-Calendar</dd>
+        <dt className="text-slate-500">版本</dt>
+        <dd>{__APP_VERSION__}</dd>
+        <dt className="text-slate-500">智能抽取</dt>
+        <dd>由 DeepSeek 模型驱动</dd>
+      </dl>
+
+      <div className="text-xs text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-800 pt-4 space-y-1">
+        <p>
+          <Bell className="inline h-3 w-3 mr-1" />
+          没有收到通知？请前往系统设置 → 通知 → Agent-Calendar，开启通知权限。
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Reusable form bits
+// ============================================================
+
+function Section({
+  title,
+  hint,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="space-y-3">
+      <div>
+        <h3 className="text-sm font-semibold">{title}</h3>
+        {hint && <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{hint}</p>}
+      </div>
+      <div className="space-y-2">{children}</div>
+    </section>
+  );
+}
+
+function ToggleRow({
+  label,
+  checked,
+  onChange,
+  disabled = false,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <label
+      className={cn(
+        "flex items-center justify-between gap-4 py-1.5 cursor-pointer",
+        disabled && "opacity-50 cursor-not-allowed",
+      )}
+    >
+      <span className="text-sm">{label}</span>
+      <input
+        type="checkbox"
+        className="h-4 w-4 accent-indigo-500"
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+    </label>
+  );
+}
+
+function NumberRow({
+  label,
+  value,
+  onChange,
+  unit,
+  min,
+  max,
+  hint,
+}: {
+  label: string;
+  value: number;
+  onChange: (n: number) => void;
+  unit?: string;
+  min?: number;
+  max?: number;
+  hint?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-1.5">
+      <span className="text-sm">
+        {label}
+        {hint && (
+          <span className="ml-1 text-xs text-slate-400">· {hint}</span>
+        )}
+      </span>
+      <div className="flex items-center gap-1">
+        <input
+          type="number"
+          className="input w-20"
+          value={value}
+          min={min}
+          max={max}
+          onChange={(e) => {
+            const n = Number(e.target.value);
+            if (Number.isFinite(n)) onChange(n);
+          }}
+        />
+        {unit && <span className="text-xs text-slate-400">{unit}</span>}
+      </div>
+    </div>
+  );
+}
+
+function OffsetsRow({
+  label,
+  value,
+  onChange,
+  example,
+}: {
+  label: string;
+  value: number[];
+  onChange: (xs: number[]) => void;
+  example: string;
+}) {
+  const [draft, setDraft] = useState(offsetsToCsv(value));
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDraft(offsetsToCsv(value));
+  }, [value]);
+
+  const commit = () => {
+    const parsed = parseOffsetsCsv(draft);
+    if (parsed === null) {
+      setErr("格式错误：用逗号分隔的非负整数（分钟）");
+      return;
+    }
+    setErr(null);
+    onChange(parsed);
+    setDraft(offsetsToCsv(parsed));
+  };
+
+  return (
+    <div className="space-y-1 py-1.5">
+      <label className="text-sm block">{label}</label>
+      <input
+        type="text"
+        className={cn(
+          "input font-mono",
+          err && "border-red-400 focus:ring-red-400",
+        )}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        placeholder={example}
+      />
+      {err ? (
+        <p className="text-xs text-red-500">{err}</p>
+      ) : (
+        <p className="text-xs text-slate-400">每个值代表"提前 N 分钟"；0 = 到点</p>
+      )}
+    </div>
+  );
+}
+
+function ThemeBtn({
+  current,
+  value,
+  onSelect,
+  icon: Icon,
+  label,
+}: {
+  current: ThemePreference;
+  value: ThemePreference;
+  onSelect: (v: ThemePreference) => void;
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+}) {
+  const active = current === value;
+  return (
+    <button
+      type="button"
+      className={cn(
+        "flex flex-1 items-center justify-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors",
+        active
+          ? "border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300"
+          : "border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800",
+      )}
+      onClick={() => onSelect(value)}
+    >
+      <Icon className="h-4 w-4" />
+      {label}
+    </button>
   );
 }
 

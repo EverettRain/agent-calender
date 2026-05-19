@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Sparkles } from "lucide-react";
 import { useIngest } from "@/hooks/useReminders";
+import Loader from "@/components/Loader";
 
 export default function QuickAdd() {
   const [text, setText] = useState("");
@@ -28,7 +29,7 @@ export default function QuickAdd() {
     <div className="card p-3 space-y-2">
       <textarea
         className="input min-h-[64px] resize-y"
-        placeholder="一句话描述，回车换行，⌘/Ctrl+Enter 提交。例如：明天14点和张三开会，周五前交报告"
+        placeholder="用一句话描述，例如：明天 14 点和张三开会，周五前要交报告。⌘/Ctrl+Enter 提交"
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={onKeyDown}
@@ -36,15 +37,17 @@ export default function QuickAdd() {
       />
       <div className="flex items-center justify-between">
         <span className="text-xs text-slate-400">
-          {ingest.isPending && "LLM 抽取中（约 5-15 秒）..."}
-          {ingest.isError && (
+          {ingest.isPending && (
+            <Loader size="sm" label="正在智能识别（约 5-15 秒）…" />
+          )}
+          {!ingest.isPending && ingest.isError && (
             <span className="text-red-500">
               失败：{extractErr(ingest.error)}
             </span>
           )}
-          {ingest.isSuccess && !ingest.isPending && (
+          {!ingest.isPending && ingest.isSuccess && (
             <span className="text-green-600">
-              已创建 {ingest.data.reminders.length} 条 · {ingest.data.total_tokens} tokens
+              已创建 {ingest.data.reminders.length} 条
             </span>
           )}
         </span>

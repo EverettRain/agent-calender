@@ -17,7 +17,10 @@ export function getApiClient(): AxiosInstance {
 
   const client = axios.create({
     baseURL: serverUrl,
-    timeout: 30_000,
+    // LLM extraction (generate + verify) typically takes 15-25s; DeepSeek can
+    // spike to 40s+. 90s leaves headroom without leaving the user staring at
+    // a "timeout" toast when the data actually went through.
+    timeout: 90_000,
     headers: apiToken ? { Authorization: `Bearer ${apiToken}` } : undefined,
   });
 

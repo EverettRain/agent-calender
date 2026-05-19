@@ -15,6 +15,10 @@ export interface ListParams {
   to?: string;
   status?: string;
   kind?: ReminderKind;
+  /** Filter by group id; pass "__inbox__" to get items with no group. */
+  group_id?: string;
+  tag_id?: string;
+  include_cancelled?: boolean;
   limit?: number;
 }
 

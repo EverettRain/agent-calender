@@ -1,7 +1,9 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
-  darkMode: "media", // follow system preference
+  // Class-based so we can override system via preferences.
+  // When theme=auto we toggle the class to match system.
+  darkMode: "class",
   theme: {
     extend: {
       colors: {

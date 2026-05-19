@@ -4,11 +4,24 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, TypeDecorator
+from sqlalchemy import DateTime, TypeDecorator, event
+from sqlalchemy.engine import Engine
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
 from app.config import get_settings
+
+
+# SQLite doesn't enforce foreign keys by default (so ON DELETE SET NULL and
+# CASCADE silently no-op). Enable it on every new connection.
+@event.listens_for(Engine, "connect")
+def _sqlite_fk_pragma(dbapi_connection, _connection_record):
+    try:
+        cur = dbapi_connection.cursor()
+        cur.execute("PRAGMA foreign_keys=ON")
+        cur.close()
+    except Exception:  # noqa: BLE001
+        pass  # non-SQLite drivers will just ignore this
 
 
 class Base(DeclarativeBase):

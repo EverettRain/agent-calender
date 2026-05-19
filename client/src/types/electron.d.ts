@@ -20,6 +20,8 @@ declare global {
   interface Window {
     electron?: ElectronApi;
   }
+  /** Injected by Vite at build time from package.json `version`. */
+  const __APP_VERSION__: string;
 }
 
 export {};

@@ -296,7 +296,10 @@ class ExtractorService:
                 source_channel=source_channel,
                 llm_model=model,
                 extraction_group_id=group_id,
+                group_id=None,
             )
+            # Set tags eagerly so Pydantic can serialize without async-load
+            reminder.tags = []
             # Already-past offsets: mark fired without retroactive notification
             mark_past_offsets_as_fired(reminder)
             out.append(reminder)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Literal
 
@@ -7,12 +8,25 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from app.models import ReminderKind, ReminderStatus
 
+HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+
 
 def _normalize_offsets(values: list[int]) -> list[int]:
     cleaned = sorted({int(v) for v in values if v is not None})
     if any(v < 0 for v in cleaned):
         raise ValueError("advance_reminders_minutes must be non-negative")
     return cleaned
+
+
+def _validate_color(v: str | None) -> str | None:
+    if v is None or v == "":
+        return None
+    if not HEX_COLOR_RE.match(v):
+        raise ValueError("color must be a 7-char hex string like '#a3b1c5'")
+    return v.lower()
+
+
+# ===== LLM-produced shapes (extractor) =====
 
 
 class ReminderDraft(BaseModel):
@@ -73,7 +87,91 @@ class VerifyResponse(BaseModel):
     issues: list[str] = Field(default_factory=list)
 
 
-# ===== API DTOs =====
+# ===== Tag / Group DTOs =====
+
+
+class TagBase(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(..., min_length=1, max_length=64)
+    color: str | None = Field(None, max_length=16)
+
+    @field_validator("color")
+    @classmethod
+    def _color(cls, v: str | None) -> str | None:
+        return _validate_color(v)
+
+
+class TagCreate(TagBase):
+    pass
+
+
+class TagUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(None, min_length=1, max_length=64)
+    color: str | None = None
+
+    @field_validator("color")
+    @classmethod
+    def _color(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        return _validate_color(v)
+
+
+class TagOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+    color: str | None
+    created_at: datetime
+
+
+class GroupBase(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(..., min_length=1, max_length=64)
+    color: str | None = Field(None, max_length=16)
+    position: int = 0
+
+    @field_validator("color")
+    @classmethod
+    def _color(cls, v: str | None) -> str | None:
+        return _validate_color(v)
+
+
+class GroupCreate(GroupBase):
+    pass
+
+
+class GroupUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(None, min_length=1, max_length=64)
+    color: str | None = None
+    position: int | None = None
+
+    @field_validator("color")
+    @classmethod
+    def _color(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        return _validate_color(v)
+
+
+class GroupOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+    color: str | None
+    position: int
+    created_at: datetime
+
+
+# ===== Reminder DTOs =====
 
 
 class IngestRequest(BaseModel):
@@ -100,6 +198,8 @@ class ReminderOut(BaseModel):
     source_channel: str
     llm_model: str | None
     extraction_group_id: str | None
+    group_id: str | None
+    tags: list[TagOut]
     created_at: datetime
     updated_at: datetime
 
@@ -124,6 +224,8 @@ class ReminderUpdate(BaseModel):
     participants: list[str] | None = None
     advance_reminders_minutes: list[int] | None = None
     status: Literal["pending", "pending_review", "notified", "done", "cancelled"] | None = None
+    group_id: str | None = None  # null literal explicitly = move to Inbox
+    tag_ids: list[str] | None = None  # null = no change; [] = clear all
 
     @field_validator("advance_reminders_minutes")
     @classmethod
@@ -145,6 +247,8 @@ class ManualReminderCreate(BaseModel):
     location: str | None = Field(None, max_length=200)
     participants: list[str] = Field(default_factory=list)
     advance_reminders_minutes: list[int] | None = None
+    group_id: str | None = None
+    tag_ids: list[str] = Field(default_factory=list)
 
     @field_validator("advance_reminders_minutes")
     @classmethod
@@ -192,4 +296,10 @@ __all__ = [
     "ExtractionGroupOut",
     "ReminderKind",
     "ReminderStatus",
+    "TagOut",
+    "TagCreate",
+    "TagUpdate",
+    "GroupOut",
+    "GroupCreate",
+    "GroupUpdate",
 ]

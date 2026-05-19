@@ -5,6 +5,7 @@ import {
   type EventSourceMessage,
 } from "@microsoft/fetch-event-source";
 import { useSettings } from "@/store/settings";
+import { usePreferences } from "@/store/preferences";
 import { Q_REMINDERS } from "@/api/reminders";
 import { formatLocalTime } from "@/lib/utils";
 import type { Reminder, ReminderDuePayload, ServerEventType } from "@/types/api";
@@ -88,7 +89,10 @@ function handleEvent(type: ServerEventType, data: unknown): void {
   }
 
   if (type === "reminder_due" && isReminderDue(data)) {
-    fireNativeNotification(data);
+    const prefs = usePreferences.getState();
+    if (prefs.notificationsEnabled) {
+      fireNativeNotification(data, prefs.notificationsSilent);
+    }
     qc?.invalidateQueries({ queryKey: Q_REMINDERS });
   }
 }
@@ -99,23 +103,21 @@ function isReminderDue(x: unknown): x is ReminderDuePayload {
   );
 }
 
-function fireNativeNotification(p: ReminderDuePayload): void {
+function fireNativeNotification(p: ReminderDuePayload, silent: boolean): void {
   const electron = window.electron;
+  const title = buildNotifTitle(p);
+  const body = buildNotifBody(p);
   if (!electron) {
-    // Fallback to web Notification (only works when window focused)
     if ("Notification" in window) {
       try {
-        new Notification(buildNotifTitle(p), { body: buildNotifBody(p) });
+        new Notification(title, { body, silent });
       } catch {
         /* permission denied or unsupported */
       }
     }
     return;
   }
-  void electron.notify({
-    title: buildNotifTitle(p),
-    body: buildNotifBody(p),
-  });
+  void electron.notify({ title, body, silent });
 }
 
 function buildNotifTitle(p: ReminderDuePayload): string {

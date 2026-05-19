@@ -4,8 +4,16 @@ import uuid
 from datetime import UTC, datetime
 from enum import Enum
 
-from sqlalchemy import JSON, Integer, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import (
+    JSON,
+    Column,
+    ForeignKey,
+    Integer,
+    String,
+    Table,
+    Text,
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base, UTCDateTime
 
@@ -35,6 +43,51 @@ class AttemptStage(str, Enum):
     GENERATE = "generate"
     VERIFY = "verify"
 
+
+# ====== Association table: Reminder <-> Tag (many-to-many) ======
+
+reminder_tag_table = Table(
+    "reminder_tags",
+    Base.metadata,
+    Column(
+        "reminder_id",
+        String(36),
+        ForeignKey("reminders.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "tag_id",
+        String(36),
+        ForeignKey("tags.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+)
+
+
+# ====== Tag ======
+
+class Tag(Base):
+    __tablename__ = "tags"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid_str)
+    name: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    color: Mapped[str | None] = mapped_column(String(16), nullable=True)  # "#RRGGBB"
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_utcnow, nullable=False)
+
+
+# ====== Group (a.k.a. list / project) ======
+
+class Group(Base):
+    __tablename__ = "groups"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid_str)
+    name: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    color: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_utcnow, nullable=False)
+
+
+# ====== Reminder ======
 
 class Reminder(Base):
     __tablename__ = "reminders"
@@ -67,11 +120,26 @@ class Reminder(Base):
     # Logical grouping UUID, not a strict FK (one group → many attempts → many reminders)
     extraction_group_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
 
+    # User-managed organization: nullable group ("Inbox" when null) + free-form tags
+    group_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("groups.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    tags: Mapped[list[Tag]] = relationship(
+        secondary=reminder_tag_table,
+        lazy="selectin",
+        order_by=Tag.name,
+    )
+
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), default=_utcnow, onupdate=_utcnow, nullable=False
     )
 
+
+# ====== ExtractionAttempt ======
 
 class ExtractionAttempt(Base):
     __tablename__ = "extraction_attempts"

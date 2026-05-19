@@ -2,6 +2,9 @@ appId: com.agentcalendar.app
 productName: Agent-Calendar
 copyright: Copyright © 2026
 
+# Don't auto-publish from builder; release upload is handled by GH Actions
+publish: null
+
 directories:
   output: release
   buildResources: build
@@ -11,22 +14,31 @@ files:
   - dist-electron/**/*
   - package.json
 
+# Mac: dmg for both architectures; unsigned (personal use)
 mac:
   category: public.app-category.productivity
   target:
     - target: dmg
       arch: [arm64, x64]
-  hardenedRuntime: true
+  identity: null              # disable code signing (no Apple Developer ID)
+  hardenedRuntime: false
   gatekeeperAssess: false
+  artifactName: ${productName}-${version}-mac-${arch}.${ext}
 
+# Windows: nsis installer for x64; unsigned
 win:
   target:
     - target: nsis
       arch: [x64]
-  artifactName: ${productName}-Setup-${version}.${ext}
+  artifactName: ${productName}-${version}-win-${arch}-setup.${ext}
 
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
+  shortcutName: Agent-Calendar
+
+# DMG layout (Mac drag-to-Applications)
+dmg:
+  title: ${productName} ${version}

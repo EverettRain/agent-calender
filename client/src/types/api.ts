@@ -12,6 +12,43 @@ export type ReminderStatus =
   | "done"
   | "cancelled";
 
+export interface Tag {
+  id: string;
+  name: string;
+  color: string | null;
+  created_at: string;
+}
+
+export interface Group {
+  id: string;
+  name: string;
+  color: string | null;
+  position: number;
+  created_at: string;
+}
+
+export interface TagCreate {
+  name: string;
+  color?: string | null;
+}
+
+export interface TagUpdate {
+  name?: string;
+  color?: string | null;
+}
+
+export interface GroupCreate {
+  name: string;
+  color?: string | null;
+  position?: number;
+}
+
+export interface GroupUpdate {
+  name?: string;
+  color?: string | null;
+  position?: number;
+}
+
 export interface Reminder {
   id: string;
   kind: ReminderKind;
@@ -29,6 +66,8 @@ export interface Reminder {
   source_channel: string;
   llm_model: string | null;
   extraction_group_id: string | null;
+  group_id: string | null;
+  tags: Tag[];
   created_at: string;
   updated_at: string;
 }
@@ -56,6 +95,8 @@ export interface ReminderUpdate {
   participants?: string[];
   advance_reminders_minutes?: number[];
   status?: ReminderStatus;
+  group_id?: string | null;
+  tag_ids?: string[];
 }
 
 export interface ManualReminderCreate {
@@ -68,6 +109,8 @@ export interface ManualReminderCreate {
   location?: string | null;
   participants?: string[];
   advance_reminders_minutes?: number[];
+  group_id?: string | null;
+  tag_ids?: string[];
 }
 
 // ===== SSE event payloads =====

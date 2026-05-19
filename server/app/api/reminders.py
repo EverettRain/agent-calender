@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import db_session, require_token
-from app.models import Reminder, ReminderStatus
+from app.models import Group, Reminder, ReminderStatus, Tag
 from app.schemas import (
     ManualReminderCreate,
     ReminderOut,
@@ -25,6 +25,26 @@ from app.services.notifier import (
 router = APIRouter(prefix="/reminders", tags=["reminders"], dependencies=[Depends(require_token)])
 
 
+async def _load_tags_by_ids(session: AsyncSession, tag_ids: list[str]) -> list[Tag]:
+    if not tag_ids:
+        return []
+    result = await session.execute(select(Tag).where(Tag.id.in_(tag_ids)))
+    tags = list(result.scalars().all())
+    found = {t.id for t in tags}
+    missing = [tid for tid in tag_ids if tid not in found]
+    if missing:
+        raise HTTPException(422, f"unknown tag id(s): {missing}")
+    return tags
+
+
+async def _verify_group_id(session: AsyncSession, group_id: str | None) -> None:
+    if group_id is None:
+        return
+    g = await session.get(Group, group_id)
+    if g is None:
+        raise HTTPException(422, f"unknown group id: {group_id}")
+
+
 @router.get("", response_model=list[ReminderOut])
 async def list_reminders(
     session: AsyncSession = Depends(db_session),
@@ -32,6 +52,9 @@ async def list_reminders(
     to: datetime | None = Query(None),
     status_: str | None = Query(None, alias="status"),
     kind: Literal["event", "deadline"] | None = Query(None),
+    group_id: str | None = Query(None, description="empty string '__inbox__' = no group"),
+    tag_id: str | None = Query(None, description="filter by tag id (single)"),
+    include_cancelled: bool = Query(False),
     limit: int = Query(200, ge=1, le=1000),
 ) -> list[ReminderOut]:
     stmt = select(Reminder)
@@ -43,9 +66,18 @@ async def list_reminders(
         stmt = stmt.where(Reminder.status == status_)
     if kind:
         stmt = stmt.where(Reminder.kind == kind)
+    if not include_cancelled:
+        stmt = stmt.where(Reminder.status != ReminderStatus.CANCELLED.value)
+    if group_id is not None:
+        if group_id == "__inbox__":
+            stmt = stmt.where(Reminder.group_id.is_(None))
+        else:
+            stmt = stmt.where(Reminder.group_id == group_id)
+    if tag_id is not None:
+        stmt = stmt.where(Reminder.tags.any(Tag.id == tag_id))
     stmt = stmt.order_by(Reminder.target_at.asc()).limit(limit)
     result = await session.execute(stmt)
-    return [ReminderOut.model_validate(r) for r in result.scalars().all()]
+    return [ReminderOut.model_validate(r) for r in result.scalars().unique().all()]
 
 
 @router.post("", response_model=ReminderOut, status_code=status.HTTP_201_CREATED)
@@ -53,13 +85,15 @@ async def create_reminder(
     payload: ManualReminderCreate,
     session: AsyncSession = Depends(db_session),
 ) -> ReminderOut:
-    # deadline 强制约束
     if payload.kind == "deadline" and (
         payload.end_at is not None or payload.duration_minutes is not None
     ):
         raise HTTPException(422, "deadline must not have end_at or duration_minutes")
 
-    # Manual create: respect explicit [] as "silent"; only fill defaults if field is omitted
+    await _verify_group_id(session, payload.group_id)
+    tags = await _load_tags_by_ids(session, payload.tag_ids)
+
+    # Manual create: respect explicit [] as "silent"; only fill defaults if field omitted
     offsets = payload.advance_reminders_minutes
     if offsets is None:
         from app.config import get_settings
@@ -81,7 +115,9 @@ async def create_reminder(
         source_channel="manual",
         llm_model=None,
         extraction_group_id=None,
+        group_id=payload.group_id,
     )
+    reminder.tags = tags  # eager-set the relationship list
     mark_past_offsets_as_fired(reminder)
     session.add(reminder)
     await session.commit()
@@ -115,16 +151,29 @@ async def update_reminder(
     data = payload.model_dump(exclude_unset=True)
 
     if "advance_reminders_minutes" in data and data["advance_reminders_minutes"] is not None:
-        # Reset already-fired offsets that are no longer in the new list
         new_offsets = set(data["advance_reminders_minutes"])
         reminder.fired_offsets = [o for o in reminder.fired_offsets if o in new_offsets]
 
-    # deadline 校验
-    new_kind = data.get("kind", reminder.kind)
     new_end = data.get("end_at", reminder.end_at)
     new_dur = data.get("duration_minutes", reminder.duration_minutes)
-    if new_kind == "deadline" and (new_end is not None or new_dur is not None):
+    if reminder.kind == "deadline" and (new_end is not None or new_dur is not None):
         raise HTTPException(422, "deadline must not have end_at or duration_minutes")
+
+    # Handle group_id update with FK verification
+    if "group_id" in data:
+        await _verify_group_id(session, data["group_id"])
+        reminder.group_id = data["group_id"]
+        del data["group_id"]
+
+    # Handle tag_ids update with FK verification
+    if "tag_ids" in data:
+        tag_ids = data["tag_ids"]
+        if tag_ids is None:
+            # explicit None = no change (not allowed via this path; Pydantic dump excludes None on exclude_unset)
+            pass
+        else:
+            reminder.tags = await _load_tags_by_ids(session, tag_ids)
+        del data["tag_ids"]
 
     for key, value in data.items():
         setattr(reminder, key, value)
