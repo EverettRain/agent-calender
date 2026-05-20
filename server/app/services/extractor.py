@@ -20,6 +20,7 @@ from app.models import (
 )
 from app.schemas import GenerateResponse, ReminderDraft, VerifyResponse
 from app.services.notifier import mark_past_offsets_as_fired
+from app.services.runtime_config import resolve_runtime_config
 
 log = structlog.get_logger(__name__)
 
@@ -53,10 +54,13 @@ class ExtractorService:
         feedback_issues: list[str] | None = None
         prior_attempt_json: dict | None = None
 
-        for _ in range(self._settings.EXTRACTION_MAX_ATTEMPTS):
+        # Resolve model + tunables from runtime settings (DB overrides env)
+        cfg = await resolve_runtime_config(session, self._settings)
+
+        for _ in range(cfg.max_attempts):
             attempt_no += 1
 
-            if total_tokens >= self._settings.EXTRACTION_TOKEN_BUDGET_PER_INGEST:
+            if total_tokens >= cfg.token_budget:
                 log.warning(
                     "extract.token_budget_exceeded",
                     group_id=group_id,
@@ -73,7 +77,7 @@ class ExtractorService:
             )
             try:
                 gen_result = await self._llm.chat_json(
-                    gen_messages, model=self._settings.DEEPSEEK_MODEL
+                    gen_messages, model=cfg.generate_model
                 )
             except Exception as exc:  # network / api error
                 session.add(
@@ -82,7 +86,7 @@ class ExtractorService:
                         source_text=text,
                         attempt_no=attempt_no,
                         stage=AttemptStage.GENERATE.value,
-                        model=self._settings.DEEPSEEK_MODEL,
+                        model=cfg.generate_model,
                         error=f"{type(exc).__name__}: {exc}",
                     )
                 )
@@ -135,13 +139,13 @@ class ExtractorService:
             }
 
             # ===== ③ Reverse-Verify =====
-            if not self._settings.EXTRACTION_VERIFY_ENABLED:
+            if not cfg.verify_enabled:
                 return await self._persist_success(
                     session, text, source_channel, group_id, drafts, gen_result.model,
                     attempt_no, total_tokens,
                 )
 
-            if total_tokens >= self._settings.EXTRACTION_TOKEN_BUDGET_PER_INGEST:
+            if total_tokens >= cfg.token_budget:
                 log.warning("extract.token_budget_exceeded_before_verify", group_id=group_id)
                 break
 
@@ -150,7 +154,7 @@ class ExtractorService:
             verify_result_obj: VerifyResponse | None = None
             try:
                 verify_result = await self._llm.chat_json(
-                    verify_messages, model=self._settings.EXTRACTION_VERIFY_MODEL
+                    verify_messages, model=cfg.verify_model
                 )
                 total_tokens += verify_result.prompt_tokens + verify_result.completion_tokens
 
@@ -170,7 +174,7 @@ class ExtractorService:
                     attempt_no=attempt_no,
                     stage=AttemptStage.VERIFY.value,
                     model=(
-                        verify_result.model if verify_result else self._settings.EXTRACTION_VERIFY_MODEL
+                        verify_result.model if verify_result else cfg.verify_model
                     ),
                     prompt_tokens=verify_result.prompt_tokens if verify_result else 0,
                     completion_tokens=verify_result.completion_tokens if verify_result else 0,
@@ -218,7 +222,7 @@ class ExtractorService:
             text=text,
             source_channel=source_channel,
             group_id=group_id,
-            model=self._settings.DEEPSEEK_MODEL,
+            model=cfg.generate_model,
             status=ReminderStatus.PENDING_REVIEW,
         )
         for r in reminders:

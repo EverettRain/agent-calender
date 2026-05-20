@@ -215,6 +215,7 @@ class IngestResponse(BaseModel):
 class ReminderUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    kind: Literal["event", "deadline"] | None = None
     title: str | None = Field(None, min_length=1, max_length=200)
     description: str | None = None
     target_at: datetime | None = None
@@ -233,6 +234,31 @@ class ReminderUpdate(BaseModel):
         if v is None:
             return None
         return _normalize_offsets(v)
+
+
+# ===== App settings DTOs =====
+
+
+class AppSettingsOut(BaseModel):
+    """Effective settings (after merging DB overrides with env defaults)."""
+
+    generate_model: str
+    verify_model: str
+    verify_enabled: bool
+    max_attempts: int
+    token_budget: int
+
+
+class AppSettingsUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # Each field None = "leave unchanged"; to revert to env default, the client
+    # sends the env default value explicitly (we don't model a tri-state here).
+    generate_model: str | None = Field(None, min_length=1, max_length=64)
+    verify_model: str | None = Field(None, min_length=1, max_length=64)
+    verify_enabled: bool | None = None
+    max_attempts: int | None = Field(None, ge=1, le=10)
+    token_budget: int | None = Field(None, ge=500, le=200000)
 
 
 class ManualReminderCreate(BaseModel):
@@ -302,4 +328,6 @@ __all__ = [
     "GroupOut",
     "GroupCreate",
     "GroupUpdate",
+    "AppSettingsOut",
+    "AppSettingsUpdate",
 ]

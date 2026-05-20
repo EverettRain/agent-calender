@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams, NavLink } from "react-router-dom";
 import {
   Bell,
+  Brain,
   Check,
   Info,
   Plug,
@@ -19,13 +20,15 @@ import {
   type ThemePreference,
 } from "@/store/preferences";
 import { healthz } from "@/api/reminders";
+import { useAppSettings, useUpdateAppSettings } from "@/hooks/useAppSettings";
 import { cn } from "@/lib/utils";
 
-type TabId = "connection" | "preferences" | "about";
+type TabId = "connection" | "preferences" | "models" | "about";
 
 const TABS: { id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "connection", label: "连接", icon: Plug },
   { id: "preferences", label: "偏好", icon: Sliders },
+  { id: "models", label: "模型", icon: Brain },
   { id: "about", label: "关于", icon: Info },
 ];
 
@@ -56,6 +59,7 @@ export default function SettingsPage() {
 
       {current === "connection" && <ConnectionPanel />}
       {current === "preferences" && <PreferencesPanel />}
+      {current === "models" && <ModelsPanel />}
       {current === "about" && <AboutPanel />}
     </div>
   );
@@ -200,7 +204,7 @@ function PreferencesPanel() {
       </header>
 
       {/* Theme */}
-      <Section title="外观" hint="跟随系统会响应 macOS 浅色/深色切换">
+      <Section title="外观" hint="跟随系统会响应系统主题的浅色/深色切换">
         <div className="flex gap-2">
           <ThemeBtn current={p.theme} value="auto" onSelect={p.setTheme} icon={Monitor} label="跟随系统" />
           <ThemeBtn current={p.theme} value="light" onSelect={p.setTheme} icon={Sun} label="浅色" />
@@ -276,6 +280,154 @@ function PreferencesPanel() {
           恢复默认偏好
         </button>
       </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Models panel (server-side runtime settings)
+// ============================================================
+
+const KNOWN_MODELS = [
+  { value: "deepseek-v4-pro", label: "deepseek-v4-pro（强，识别推荐）" },
+  { value: "deepseek-v4-flash", label: "deepseek-v4-flash（快，复核推荐）" },
+  { value: "deepseek-chat", label: "deepseek-chat（旧，将弃用）" },
+  { value: "deepseek-reasoner", label: "deepseek-reasoner（旧，将弃用）" },
+];
+
+function ModelsPanel() {
+  const { data, isLoading, isError, error } = useAppSettings();
+  const update = useUpdateAppSettings();
+  const [saved, setSaved] = useState(false);
+
+  if (isLoading) {
+    return <p className="text-sm text-slate-400">加载中…</p>;
+  }
+  if (isError || !data) {
+    return (
+      <p className="text-sm text-red-500">
+        加载失败：{(error as Error)?.message ?? "未知错误"}
+      </p>
+    );
+  }
+
+  const patch = (payload: Parameters<typeof update.mutate>[0]) => {
+    update.mutate(payload, {
+      onSuccess: () => {
+        setSaved(true);
+        setTimeout(() => setSaved(false), 1500);
+      },
+    });
+  };
+
+  return (
+    <div className="space-y-8">
+      <header>
+        <h2 className="text-lg font-semibold mb-1">模型与抽取</h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          这些是服务端的全局设置，所有设备与 Telegram 共享，修改即时生效。
+          {saved && <span className="ml-2 text-green-600">已保存 ✓</span>}
+        </p>
+      </header>
+
+      <Section title="识别模型" hint="把自然语言抽取成结构化待办时使用">
+        <ModelPicker
+          value={data.generate_model}
+          onChange={(m) => patch({ generate_model: m })}
+        />
+      </Section>
+
+      <Section title="复核模型" hint="反向校验抽取结果时使用，通常用更快更便宜的模型">
+        <ModelPicker
+          value={data.verify_model}
+          onChange={(m) => patch({ verify_model: m })}
+        />
+      </Section>
+
+      <Section title="抽取参数">
+        <ToggleRow
+          label="启用复核（更准但更慢、更费 token）"
+          checked={data.verify_enabled}
+          onChange={(v) => patch({ verify_enabled: v })}
+        />
+        <NumberRow
+          label="最大尝试次数"
+          value={data.max_attempts}
+          onChange={(n) => patch({ max_attempts: n })}
+          min={1}
+          max={10}
+        />
+        <NumberRow
+          label="单次 token 预算"
+          value={data.token_budget}
+          onChange={(n) => patch({ token_budget: n })}
+          min={500}
+          max={200000}
+          unit="tokens"
+        />
+      </Section>
+
+      <p className="text-xs text-slate-400 border-t border-slate-200 dark:border-slate-800 pt-4">
+        识别频繁被标记"待复核"时，可尝试：换更强的识别模型、关掉复核、或调高 token 预算。
+      </p>
+    </div>
+  );
+}
+
+function ModelPicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (m: string) => void;
+}) {
+  const isKnown = KNOWN_MODELS.some((m) => m.value === value);
+  const [custom, setCustom] = useState(!isKnown);
+  const [draft, setDraft] = useState(value);
+
+  return (
+    <div className="space-y-2">
+      {!custom ? (
+        <select
+          className="input"
+          value={value}
+          onChange={(e) => {
+            if (e.target.value === "__custom__") {
+              setCustom(true);
+              setDraft(value);
+            } else {
+              onChange(e.target.value);
+            }
+          }}
+        >
+          {KNOWN_MODELS.map((m) => (
+            <option key={m.value} value={m.value}>
+              {m.label}
+            </option>
+          ))}
+          {!isKnown && <option value={value}>{value}（自定义）</option>}
+          <option value="__custom__">自定义…</option>
+        </select>
+      ) : (
+        <div className="flex gap-2">
+          <input
+            className="input font-mono flex-1"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="输入模型名，如 deepseek-v4-pro"
+          />
+          <button
+            className="btn-primary"
+            onClick={() => draft.trim() && onChange(draft.trim())}
+          >
+            应用
+          </button>
+          <button className="btn-ghost" onClick={() => setCustom(false)}>
+            选预设
+          </button>
+        </div>
+      )}
+      <p className="text-xs text-slate-400">当前：<code className="font-mono">{value}</code></p>
     </div>
   );
 }

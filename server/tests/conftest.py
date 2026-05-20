@@ -11,6 +11,18 @@ os.environ.setdefault("DEEPSEEK_API_KEY", "test-deepseek-key-xxxxxx")
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 os.environ.setdefault("LOG_LEVEL", "WARNING")
 os.environ.setdefault("SCHEDULER_ENABLED", "false")  # tests drive notifier.tick() manually
+# Isolate tests from a real server/.env that may contain Telegram secrets.
+# Force-empty (override the .env file) so the bot is disabled by default in tests.
+os.environ["TELEGRAM_BOT_TOKEN"] = ""
+os.environ["PUBLIC_BASE_URL"] = ""
+os.environ["TELEGRAM_WEBHOOK_SECRET"] = ""
+os.environ["TELEGRAM_ALLOWED_CHAT_IDS"] = ""
+# Pin extraction tunables so tests are deterministic regardless of dev's .env
+os.environ["EXTRACTION_MAX_ATTEMPTS"] = "3"
+os.environ["EXTRACTION_VERIFY_ENABLED"] = "true"
+os.environ["EXTRACTION_VERIFY_MODEL"] = "deepseek-v4-flash"
+os.environ["EXTRACTION_TOKEN_BUDGET_PER_INGEST"] = "16000"
+os.environ["DEEPSEEK_MODEL"] = "deepseek-v4-pro"
 
 import pytest
 import pytest_asyncio

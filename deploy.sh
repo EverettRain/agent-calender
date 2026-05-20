@@ -35,6 +35,11 @@ read_choice() {
     read -r REPLY
 }
 confirm() {
+    # Non-interactive / CI: ASSUME_YES=1 (env) or --yes/-y flag bypasses the prompt
+    if [ -n "${ASSUME_YES:-}" ]; then
+        write_dim "$1 [y/N]: y（自动确认）"
+        return 0
+    fi
     read_choice "$1 [y/N]: "
     [[ "$REPLY" == "y" || "$REPLY" == "Y" ]]
 }
@@ -100,8 +105,10 @@ check_deps() {
 }
 
 # ── SSH 包装 ──
+# -n redirects ssh stdin from /dev/null so it never swallows the caller's stdin
+# (critical: lets `printf 'y\n' | ./deploy.sh push-env` and CI pipelines work)
 ssh_run() {
-    ssh -o ConnectTimeout=10 "$REMOTE_HOST" "$@"
+    ssh -n -o ConnectTimeout=10 "$REMOTE_HOST" "$@"
 }
 
 ssh_sudo() {
@@ -533,8 +540,31 @@ show_menu() {
     done
 }
 
+# ── 参数解析（全局 flag 与子命令）──
+# ASSUME_YES 也可由环境变量传入（CI 友好）：ASSUME_YES=1 ./deploy.sh push-env
+ASSUME_YES="${ASSUME_YES:-}"
+_POSITIONAL=()
+for arg in "$@"; do
+    case "$arg" in
+        -y|--yes) ASSUME_YES=1 ;;
+        -h|--help)
+            write_info "用法: $0 [-y|--yes] <command>"
+            write_info "命令: setup|deploy|status|logs|restart|start|stop|backup-db|restore-db|push-env|ssh|uninstall"
+            write_info "  -y, --yes   跳过所有确认提示（CI/自动化用）"
+            write_info "不带命令则进入交互菜单"
+            exit 0
+            ;;
+        -*)
+            write_err "未知选项: $arg"
+            exit 1
+            ;;
+        *) _POSITIONAL+=("$arg") ;;
+    esac
+done
+set -- "${_POSITIONAL[@]}"
+
 # ── 非交互命令（CI/脚本调用）──
-# 用法：./deploy.sh <cmd>
+# 用法：./deploy.sh [-y] <cmd>
 if [ $# -gt 0 ]; then
     check_deps
     case "$1" in
@@ -552,7 +582,7 @@ if [ $# -gt 0 ]; then
         uninstall)   op_uninstall ;;
         *)
             write_err "未知命令: $1"
-            write_info "用法: $0 [setup|deploy|status|logs|restart|start|stop|backup-db|restore-db|push-env|ssh|uninstall]"
+            write_info "用法: $0 [-y|--yes] [setup|deploy|status|logs|restart|start|stop|backup-db|restore-db|push-env|ssh|uninstall]"
             write_info "不带参数则进入交互菜单"
             exit 1
             ;;

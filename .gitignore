@@ -20,6 +20,9 @@ backups/
 # Claude Code per-machine permissions (not for sharing)
 .claude/settings.local.json
 
+# Local AI assistant working doc — kept on each machine, not shared
+CLAUDE.md
+
 # Reference materials kept locally for inspiration (not part of this project)
 RainCloud.sh
 

@@ -3,8 +3,10 @@ import {
   AlertTriangle,
   Bell,
   Check,
+  CheckCircle2,
   Clock,
   MapPin,
+  Pencil,
   Plus,
   Trash2,
   Users,
@@ -16,6 +18,7 @@ import {
   useUpdateReminder,
 } from "@/hooks/useReminders";
 import { useGroups, useTags } from "@/hooks/useTagsGroups";
+import EditReminderDialog from "@/components/EditReminderDialog";
 import {
   cn,
   formatCountdown,
@@ -43,6 +46,7 @@ export default function ReminderCard({ reminder }: Props) {
 
   const isDeadline = reminder.kind === "deadline";
   const isReview = reminder.status === "pending_review";
+  const [editing, setEditing] = useState(false);
 
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -50,6 +54,9 @@ export default function ReminderCard({ reminder }: Props) {
     const id = setInterval(() => setTick((n) => n + 1), 60_000);
     return () => clearInterval(id);
   }, [isDeadline]);
+
+  const approve = () =>
+    update.mutate({ id: reminder.id, payload: { status: "pending" } });
 
   const group = reminder.group_id
     ? groups?.find((g) => g.id === reminder.group_id) ?? null
@@ -150,6 +157,23 @@ export default function ReminderCard({ reminder }: Props) {
           )}
         </div>
         <div className="flex shrink-0 gap-1">
+          {isReview && (
+            <button
+              className="btn-ghost text-emerald-600 dark:text-emerald-400"
+              title="通过复核"
+              onClick={approve}
+              disabled={update.isPending}
+            >
+              <CheckCircle2 className="h-4 w-4" />
+            </button>
+          )}
+          <button
+            className="btn-ghost"
+            title="编辑"
+            onClick={() => setEditing(true)}
+          >
+            <Pencil className="h-4 w-4" />
+          </button>
           {reminder.status !== "done" && (
             <button
               className="btn-ghost"
@@ -301,6 +325,12 @@ export default function ReminderCard({ reminder }: Props) {
             ))}
         </span>
       </div>
+
+      <EditReminderDialog
+        reminder={reminder}
+        open={editing}
+        onClose={() => setEditing(false)}
+      />
     </div>
   );
 }

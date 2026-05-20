@@ -39,6 +39,32 @@ export function formatLocalTime(iso: string): string {
 }
 
 /**
+ * Convert a UTC ISO string to a value usable by <input type="datetime-local">
+ * (local wall-clock "YYYY-MM-DDTHH:mm", no timezone suffix).
+ */
+export function isoToDatetimeLocal(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+    `T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  );
+}
+
+/**
+ * Convert a datetime-local form value (local wall-clock) back to a UTC ISO string.
+ * Returns null for empty input.
+ */
+export function datetimeLocalToIso(local: string): string | null {
+  if (!local) return null;
+  // new Date("YYYY-MM-DDTHH:mm") is interpreted as local time → toISOString gives UTC
+  const d = new Date(local);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
+/**
  * Render a deadline countdown ("还剩 2 天 3 小时" / "已过 1 小时").
  */
 export function formatCountdown(targetIso: string, nowMs: number = Date.now()): string {

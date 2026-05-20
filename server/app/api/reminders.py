@@ -154,10 +154,18 @@ async def update_reminder(
         new_offsets = set(data["advance_reminders_minutes"])
         reminder.fired_offsets = [o for o in reminder.fired_offsets if o in new_offsets]
 
+    # Resolve the effective post-update kind, then enforce deadline constraints.
+    new_kind = data.get("kind", reminder.kind)
     new_end = data.get("end_at", reminder.end_at)
     new_dur = data.get("duration_minutes", reminder.duration_minutes)
-    if reminder.kind == "deadline" and (new_end is not None or new_dur is not None):
-        raise HTTPException(422, "deadline must not have end_at or duration_minutes")
+    if new_kind == "deadline":
+        if data.get("end_at") is not None or data.get("duration_minutes") is not None:
+            raise HTTPException(422, "deadline must not have end_at or duration_minutes")
+        # Switching to deadline: drop any existing range fields automatically
+        if new_end is not None:
+            reminder.end_at = None
+        if new_dur is not None:
+            reminder.duration_minutes = None
 
     # Handle group_id update with FK verification
     if "group_id" in data:

@@ -86,6 +86,7 @@ export interface IngestResponse {
 }
 
 export interface ReminderUpdate {
+  kind?: ReminderKind;
   title?: string;
   description?: string | null;
   target_at?: string;
@@ -97,6 +98,22 @@ export interface ReminderUpdate {
   status?: ReminderStatus;
   group_id?: string | null;
   tag_ids?: string[];
+}
+
+export interface AppSettings {
+  generate_model: string;
+  verify_model: string;
+  verify_enabled: boolean;
+  max_attempts: number;
+  token_budget: number;
+}
+
+export interface AppSettingsUpdate {
+  generate_model?: string;
+  verify_model?: string;
+  verify_enabled?: boolean;
+  max_attempts?: number;
+  token_budget?: number;
 }
 
 export interface ManualReminderCreate {

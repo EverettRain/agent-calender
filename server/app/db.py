@@ -20,7 +20,7 @@ def _sqlite_fk_pragma(dbapi_connection, _connection_record):
         cur = dbapi_connection.cursor()
         cur.execute("PRAGMA foreign_keys=ON")
         cur.close()
-    except Exception:  # noqa: BLE001
+    except Exception:
         pass  # non-SQLite drivers will just ignore this
 
 

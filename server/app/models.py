@@ -87,6 +87,23 @@ class Group(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=_utcnow, nullable=False)
 
 
+class AppSettings(Base):
+    """Single-row runtime settings. NULL fields fall back to env defaults.
+    Always operated on via the id=1 row."""
+
+    __tablename__ = "app_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    generate_model: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    verify_model: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    verify_enabled: Mapped[bool | None] = mapped_column(nullable=True)
+    max_attempts: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    token_budget: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), default=_utcnow, onupdate=_utcnow, nullable=False
+    )
+
+
 # ====== Reminder ======
 
 class Reminder(Base):

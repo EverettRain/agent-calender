@@ -30,7 +30,9 @@ class Settings(BaseSettings):
     EXTRACTION_MAX_ATTEMPTS: int = Field(3, ge=1, le=10)
     EXTRACTION_VERIFY_ENABLED: bool = True
     EXTRACTION_VERIFY_MODEL: str = "deepseek-v4-flash"
-    EXTRACTION_TOKEN_BUDGET_PER_INGEST: int = Field(8000, ge=500)
+    # Bumped from 8000: multi-item extraction + verify retries can exceed the old cap,
+    # which itself was a frequent cause of premature pending_review fallback.
+    EXTRACTION_TOKEN_BUDGET_PER_INGEST: int = Field(16000, ge=500)
 
     DEFAULT_EVENT_OFFSETS_MINUTES: str = "0"
     DEFAULT_DEADLINE_OFFSETS_MINUTES: str = "1440,60"
@@ -47,6 +49,31 @@ class Settings(BaseSettings):
     # Default is permissive because we auth by bearer token (no cookies, no CSRF
     # surface). Tighten via env if you ever expose to anonymous browsers.
     CORS_ALLOW_ORIGINS: str = "*"
+
+    # Public base URL of this server, used for Telegram webhook registration.
+    # Leave empty in dev → bot stays disabled.
+    PUBLIC_BASE_URL: str = ""
+
+    # Telegram bot — leave token empty to fully disable the integration.
+    TELEGRAM_BOT_TOKEN: str = ""
+    TELEGRAM_ALLOWED_CHAT_IDS: str = ""  # CSV of allowed chat ids
+    TELEGRAM_WEBHOOK_SECRET: str = ""    # random string verifying Telegram requests
+
+    @property
+    def telegram_enabled(self) -> bool:
+        return bool(self.TELEGRAM_BOT_TOKEN and self.PUBLIC_BASE_URL)
+
+    def telegram_allowed_chat_ids(self) -> set[int]:
+        out: set[int] = set()
+        for part in self.TELEGRAM_ALLOWED_CHAT_IDS.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            try:
+                out.add(int(part))
+            except ValueError:
+                continue
+        return out
 
     def cors_origin_list(self) -> list[str]:
         raw = self.CORS_ALLOW_ORIGINS.strip()
